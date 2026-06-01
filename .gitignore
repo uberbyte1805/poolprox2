@@ -59,8 +59,9 @@ report.[0-9]_.[0-9]_.[0-9]_.[0-9]_.json
 # Database
 data/
 
-# Drizzle migrations
-drizzle/
+# Drizzle migrations are SOURCE OF TRUTH — they MUST be committed so a fresh
+# install can build the schema. Do NOT ignore drizzle/. (Previously 'drizzle/'
+# here silently dropped 0006_*.sql, breaking migrations on clean installs.)
 
 # Bun lockfile (optional - some prefer to commit this)
 # bun.lock
