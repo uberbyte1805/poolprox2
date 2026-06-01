@@ -218,7 +218,7 @@ export default function Sync() {
                 <Input
                   value={url}
                   onChange={(e) => setUrl(e.target.value)}
-                  placeholder="https://proxy.yahnia.my.id"
+                  placeholder="https://your-poolprox2-instance.example.com"
                   className="mt-1 font-mono text-sm"
                 />
               </div>

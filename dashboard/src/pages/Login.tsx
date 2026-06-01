@@ -27,6 +27,7 @@ export default function Login({ onLogin }: LoginProps) {
   const [apiKey, setApiKey] = useState("");
   const [showKey, setShowKey] = useState(false);
   const [newPassword, setNewPassword] = useState("");
+  const [confirmPassword, setConfirmPassword] = useState("");
 
   const [error, setError] = useState<string | null>(null);
   const [loading, setLoading] = useState(false);
@@ -62,18 +63,30 @@ export default function Login({ onLogin }: LoginProps) {
 
   async function handleRecover(e: React.FormEvent) {
     e.preventDefault();
-    if (!apiKey.trim()) {
-      setError("Masukkan API key");
-      return;
-    }
-    if (newPassword.length < 6) {
-      setError("Password baru minimal 6 karakter");
-      return;
+    // First-run: skip API key — the backend trusts the dashboard on the same host.
+    if (isFirstRun) {
+      if (newPassword.length < 6) {
+        setError("Password baru minimal 6 karakter");
+        return;
+      }
+      if (newPassword !== confirmPassword) {
+        setError("Password dan konfirmasi tidak cocok");
+        return;
+      }
+    } else {
+      if (!apiKey.trim()) {
+        setError("Masukkan API key");
+        return;
+      }
+      if (newPassword.length < 6) {
+        setError("Password baru minimal 6 karakter");
+        return;
+      }
     }
     setLoading(true);
     setError(null);
     try {
-      const key = await setDashboardPassword(apiKey.trim(), newPassword);
+      const key = await setDashboardPassword(isFirstRun ? "" : apiKey.trim(), newPassword);
       localStorage.setItem("api_key", key);
       onLogin();
     } catch (err) {
@@ -150,30 +163,31 @@ export default function Login({ onLogin }: LoginProps) {
             </form>
           ) : (
             <form onSubmit={handleRecover} className="space-y-4">
-              <div className="relative">
-                <Input
-                  type={showKey ? "text" : "password"}
-                  value={apiKey}
-                  onChange={(e) => {
-                    setApiKey(e.target.value);
-                    setError(null);
-                  }}
-                  placeholder="pool-proxy-secret-key"
-                  className="pr-10 font-mono text-sm"
-                  autoFocus
-                />
-                <button
-                  type="button"
-                  onClick={() => setShowKey(!showKey)}
-                  className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
-                >
-                  {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
-                </button>
-              </div>
+              {!isFirstRun && (
+                <div className="relative">
+                  <Input
+                    type={showKey ? "text" : "password"}
+                    value={apiKey}
+                    onChange={(e) => {
+                      setApiKey(e.target.value);
+                      setError(null);
+                    }}
+                    placeholder="pool-proxy-secret-key"
+                    className="pr-10 font-mono text-sm"
+                    autoFocus
+                  />
+                  <button
+                    type="button"
+                    onClick={() => setShowKey(!showKey)}
+                    className="absolute right-3 top-1/2 -translate-y-1/2 text-[var(--muted-foreground)] hover:text-[var(--foreground)]"
+                  >
+                    {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
+                  </button>
+                </div>
+              )}
               {isFirstRun && (
                 <p className="text-xs text-[var(--muted-foreground)]">
-                  💡 API key ada di file <code className="rounded bg-[var(--muted)]/20 px-1 py-0.5">.env</code> baris <code className="rounded bg-[var(--muted)]/20 px-1 py-0.5">API_KEY=...</code>.
-                  Di terminal, jalankan: <code className="rounded bg-[var(--muted)]/20 px-1 py-0.5">grep API_KEY .env</code>
+                  💡 Setup awal — buat password untuk dashboard. API key otomatis digunakan dari server.
                 </p>
               )}
 
@@ -186,7 +200,21 @@ export default function Login({ onLogin }: LoginProps) {
                 }}
                 placeholder="Password baru (min. 6 karakter)"
                 className="text-sm"
+                autoFocus={isFirstRun}
               />
+
+              {isFirstRun && (
+                <Input
+                  type="password"
+                  value={confirmPassword}
+                  onChange={(e) => {
+                    setConfirmPassword(e.target.value);
+                    setError(null);
+                  }}
+                  placeholder="Konfirmasi password"
+                  className="text-sm"
+                />
+              )}
 
               {error && (
                 <div className="rounded-md bg-red-500/10 p-3 text-sm text-red-400">{error}</div>

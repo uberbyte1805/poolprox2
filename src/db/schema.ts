@@ -166,7 +166,7 @@ export const proxyPool = pgTable("proxy_pool", {
 // Stored LOCAL-only (never committed to git). api_key = that peer's API key.
 export const peers = pgTable("peers", {
   id: serial("id").primaryKey(),
-  url: text("url").notNull(), // e.g. https://proxy.yahnia.my.id
+  url: text("url").notNull(), // e.g. https://your-poolprox2.example.com
   apiKey: text("api_key").notNull(), // peer's API key (Bearer) for /api/sync/*
   label: text("label"),
   enabled: boolean("enabled").notNull().default(true),

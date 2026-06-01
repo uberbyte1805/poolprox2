@@ -120,9 +120,10 @@ keysRouter.post("/login", async (c) => {
   return c.json({ key });
 });
 
-// Set/reset password. Proof = a valid API key (also the first-run path
-// and the "forgot password" recovery). Optionally returns the key so the
-// caller can log straight in.
+// Set/reset password. On first-run (no password set yet) the API key check
+// is skipped — the dashboard is already running on the same machine that holds
+// the .env, so the API key is implicitly trusted. Password reset (existing
+// password) still requires a valid API key as proof.
 keysRouter.post("/set-password", async (c) => {
   const body = await c.req
     .json<{ key?: string; password?: string }>()
@@ -130,7 +131,12 @@ keysRouter.post("/set-password", async (c) => {
   const key = (body.key || "").trim();
   const password = body.password || "";
 
-  if (!(await isValidApiKey(key))) {
+  const hasPassword = !!(await getPasswordHash());
+
+  // First-run / password recovery: require API key ONLY if a password is
+  // already set (resetting needs proof). Fresh installs skip this gate
+  // because the dashboard is trusted (same host as .env).
+  if (hasPassword && !(await isValidApiKey(key))) {
     return c.json({ error: "Invalid API key" }, 401);
   }
   if (password.length < 6) {

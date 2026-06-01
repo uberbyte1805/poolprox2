@@ -34,8 +34,9 @@ interface OneMinAITokens {
   email?: string;
 }
 
-const ONEMINAI_BASE = "https://api.1min.ai";
-const CHAT_PATH = "/api/chat-with-ai";
+const ONEMINAI_BASE = process.env.ONEMINAI_BASE || "http://localhost:20200";
+const CHAT_PATH = process.env.ONEMINAI_CHAT_PATH || "/v1/chat/completions";
+const ADAPTER_MODE = process.env.ONEMINAI_ADAPTER_MODE !== "false"; // default true
 
 // OpenAI-name -> 1MinAI-name (most are identity). Drives supportedModels + resolveModel.
 const oneminaiModelMap: Record<string, string> = {
@@ -106,6 +107,10 @@ export class OneMinAIProvider extends BaseProvider {
   }));
 
   private getTokens(account: Account): OneMinAITokens | null {
+    // Adapter mode: use env-provided API key, no token refresh needed.
+    if (ADAPTER_MODE && process.env.ONEMINAI_API_KEY) {
+      return { api_key: process.env.ONEMINAI_API_KEY };
+    }
     if (!account.tokens) return null;
     try {
       const t = typeof account.tokens === "string" ? JSON.parse(account.tokens) : account.tokens;
@@ -147,6 +152,15 @@ export class OneMinAIProvider extends BaseProvider {
   }
 
   private buildPayload(request: ChatCompletionRequest): Record<string, unknown> {
+    // Adapter mode: use standard OpenAI chat completion format.
+    if (ADAPTER_MODE) {
+      return {
+        model: this.resolveModel(request.model),
+        messages: request.messages,
+        max_tokens: request.max_tokens ?? 4096,
+        stream: false,
+      };
+    }
     return {
       type: "UNIFY_CHAT_WITH_AI",
       model: this.resolveModel(request.model),
@@ -165,11 +179,15 @@ export class OneMinAIProvider extends BaseProvider {
     const tokens = this.getTokens(account);
     if (!tokens?.api_key) throw new Error("expired: no api_key");
 
-    const url = `${ONEMINAI_BASE}${CHAT_PATH}${streaming ? "?isStreaming=true" : ""}`;
+    const url = `${ONEMINAI_BASE}${CHAT_PATH}${streaming && !ADAPTER_MODE ? "?isStreaming=true" : ""}`;
+    // Adapter uses OpenAI-compatible auth header; native 1minAI uses API-KEY.
+    const authHeader = ADAPTER_MODE
+      ? { Authorization: `Bearer ${tokens.api_key}` }
+      : { "API-KEY": tokens.api_key };
     return this.fetchWithTimeout(url, {
       method: "POST",
       headers: {
-        "API-KEY": tokens.api_key,
+        ...authHeader,
         "Content-Type": "application/json",
         ...(streaming ? { Accept: "text/event-stream" } : {}),
       },
@@ -215,9 +233,18 @@ export class OneMinAIProvider extends BaseProvider {
     }
   }
 
-  /** Extract assistant text + token usage from a 1MinAI response body. */
+  /** Extract assistant text + token usage from a response body. */
   private parseResult(data: any): { text: string; usage: { prompt: number; completion: number } } {
     if (!data) return { text: "", usage: { prompt: 0, completion: 0 } };
+    // Adapter mode: parse OpenAI-compatible response.
+    if (ADAPTER_MODE) {
+      const text = data.choices?.[0]?.message?.content || "";
+      const usage = data.usage || {};
+      return {
+        text,
+        usage: { prompt: Number(usage.prompt_tokens) || 0, completion: Number(usage.completion_tokens) || 0 },
+      };
+    }
     const aiRecord = data.aiRecord || {};
     const detail = aiRecord.aiRecordDetail || {};
     let result = "";
@@ -367,6 +394,13 @@ export class OneMinAIProvider extends BaseProvider {
   async fetchQuota(account: Account): Promise<{ success: boolean; quota?: { limit: number; remaining: number; used: number; resetAt?: Date | string | null }; error?: string }> {
     const tokens = this.getTokens(account);
     if (!tokens?.api_key) return { success: false, error: "No api_key" };
+
+    // Adapter mode: no per-account quota tracking — the adapter handles
+    // account rotation internally. Return a dummy healthy quota so the
+    // warmup layer keeps the account active.
+    if (ADAPTER_MODE) {
+      return { success: true, quota: { limit: 1, remaining: 1, used: 0, resetAt: null } };
+    }
 
     // Preferred: live read via x-auth-token JWT -> team.credit is the REAL balance.
     // The farm stores it as `jwt`; older records may use `access_token`.
