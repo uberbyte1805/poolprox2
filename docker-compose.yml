@@ -1,0 +1,32 @@
+# PoolProx2 — local PostgreSQL for development / self-hosting.
+#
+# Quick start:
+#   docker compose up -d        # start the database in the background
+#   bash install.sh             # the installer runs migrations against it
+#
+# Defaults below match the DATABASE_URL in .env.example
+# (postgres://postgres:postgres@localhost:5432/pool_proxy) so it works
+# with zero configuration. Override via env vars if you need to:
+#   POOLPROX_DB_PORT, POOLPROX_DB_USER, POOLPROX_DB_PASSWORD, POOLPROX_DB_NAME
+
+services:
+  db:
+    image: postgres:16-alpine
+    container_name: poolprox2-db
+    restart: unless-stopped
+    environment:
+      POSTGRES_USER: ${POOLPROX_DB_USER:-postgres}
+      POSTGRES_PASSWORD: ${POOLPROX_DB_PASSWORD:-postgres}
+      POSTGRES_DB: ${POOLPROX_DB_NAME:-pool_proxy}
+    ports:
+      - "${POOLPROX_DB_PORT:-5432}:5432"
+    volumes:
+      - poolprox2-pgdata:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U ${POOLPROX_DB_USER:-postgres} -d ${POOLPROX_DB_NAME:-pool_proxy}"]
+      interval: 5s
+      timeout: 5s
+      retries: 10
+
+volumes:
+  poolprox2-pgdata:
