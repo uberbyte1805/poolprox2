@@ -158,7 +158,7 @@ export default function Login({ onLogin }: LoginProps) {
                     setApiKey(e.target.value);
                     setError(null);
                   }}
-                  placeholder="sk-pool-..."
+                  placeholder="pool-proxy-secret-key"
                   className="pr-10 font-mono text-sm"
                   autoFocus
                 />
@@ -170,6 +170,12 @@ export default function Login({ onLogin }: LoginProps) {
                   {showKey ? <EyeOff className="h-4 w-4" /> : <Eye className="h-4 w-4" />}
                 </button>
               </div>
+              {isFirstRun && (
+                <p className="text-xs text-[var(--muted-foreground)]">
+                  💡 API key ada di file <code className="rounded bg-[var(--muted)]/20 px-1 py-0.5">.env</code> baris <code className="rounded bg-[var(--muted)]/20 px-1 py-0.5">API_KEY=...</code>.
+                  Di terminal, jalankan: <code className="rounded bg-[var(--muted)]/20 px-1 py-0.5">grep API_KEY .env</code>
+                </p>
+              )}
 
               <Input
                 type="password"

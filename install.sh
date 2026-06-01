@@ -299,18 +299,21 @@ main() {
   run_migrations_if_db
   install_cli_symlink
 
+  local api_key
+  api_key=$(grep -E '^API_KEY=' .env 2>/dev/null | head -1 | cut -d= -f2-)
+  if [[ -z "$api_key" ]]; then api_key="(tidak ditemukan — cek .env)"; fi
+
   printf "\n${C_GREEN}${C_BOLD}Done.${C_RESET}  PoolProx2 is installed at ${C_BOLD}%s${C_RESET}\n\n" "$PROJECT_DIR"
   cat <<EOF
 Next steps:
-  1. Edit .env if needed:
-       \$EDITOR $PROJECT_DIR/.env
-  2. Make sure PostgreSQL is running and DATABASE_URL points to a reachable DB.
-       Quick local DB: createdb pool_proxy
-  3. Start the server (runs in background, prints URLs when ready):
+  1. Start the server (runs in background, prints URLs when ready):
        poolprox2 start
-  4. Open the dashboard:
+  2. Open the dashboard:
        http://localhost:1631
-  5. (optional) Start automatically on boot/login:
+  3. Login dashboard — masukkan API key ini:
+       $api_key
+     (atau cek di $PROJECT_DIR/.env baris API_KEY=)
+  4. (optional) Start automatically on boot/login:
        poolprox2 autostart
 
 Other commands: poolprox2 status | stop | restart | logs | update | version
