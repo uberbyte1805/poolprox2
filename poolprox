@@ -95,28 +95,75 @@ do_start() {
   fi
 }
 
+# Collect a PID plus all its descendant PIDs (depth-first). Multi-instance safe.
+collect_tree() {
+  local pid=$1 child
+  for child in $(pgrep -P "$pid" 2>/dev/null); do
+    collect_tree "$child"
+  done
+  echo "$pid"
+}
+
+# Find THIS instance's production.ts PID(s) by matching working directory.
+# Scoped to PROJECT_DIR so it never touches another PoolProx2 instance on the host.
+scoped_root_pids() {
+  local pid cwd
+  for pid in $(pgrep -f "bun scripts/production.ts" 2>/dev/null); do
+    cwd=$(readlink "/proc/$pid/cwd" 2>/dev/null)
+    [ "$cwd" = "$PROJECT_DIR" ] && echo "$pid"
+  done
+}
+
 do_stop() {
   echo "Stopping PoolProx..."
 
-  # Kill ALL poolprox-related bun processes regardless of PID file
-  pkill -f "bun scripts/production.ts" 2>/dev/null
-  pkill -f "bun src/index.ts" 2>/dev/null
-  pkill -f "bun run scripts/serve-dashboard.ts" 2>/dev/null
+  # Resolve the root PID(s) for THIS instance only (never a global pkill):
+  #  1) PID file written by do_start (preferred)
+  #  2) fallback: production.ts process whose cwd == this project dir
+  local roots=""
+  if [ -f "$PID_FILE" ]; then
+    local fpid
+    fpid=$(cat "$PID_FILE" 2>/dev/null)
+    if [ -n "$fpid" ] && kill -0 "$fpid" 2>/dev/null; then
+      roots="$fpid"
+    fi
+  fi
+  [ -z "$roots" ] && roots=$(scoped_root_pids)
 
-  # Wait for processes to die
+  if [ -z "$roots" ]; then
+    rm -f "$PID_FILE"
+    echo "⏹️  PoolProx is not running (this instance)"
+    return 0
+  fi
+
+  # Build the full process tree (parent + children) for each root.
+  local pids="" r
+  for r in $roots; do
+    pids="$pids $(collect_tree "$r")"
+  done
+
+  # Graceful TERM first.
+  kill $pids 2>/dev/null
+
+  # Wait up to ~5s for the roots to exit.
   local i=0
-  while pgrep -f "bun src/index.ts" >/dev/null 2>&1 && [ $i -lt 10 ]; do
+  while [ $i -lt 10 ]; do
+    local alive=0
+    for r in $roots; do
+      kill -0 "$r" 2>/dev/null && alive=1
+    done
+    [ "$alive" = "0" ] && break
     sleep 0.5
     i=$((i + 1))
   done
 
-  # Force kill if still alive
-  if pgrep -f "bun src/index.ts" >/dev/null 2>&1; then
-    pkill -9 -f "bun scripts/production.ts" 2>/dev/null
-    pkill -9 -f "bun src/index.ts" 2>/dev/null
-    pkill -9 -f "bun run scripts/serve-dashboard.ts" 2>/dev/null
-    sleep 0.5
-  fi
+  # Force kill anything still standing.
+  for r in $roots; do
+    if kill -0 "$r" 2>/dev/null; then
+      kill -9 $pids 2>/dev/null
+      break
+    fi
+  done
 
   rm -f "$PID_FILE"
   echo "⏹️  PoolProx stopped"
