@@ -251,15 +251,32 @@ run_migrations_if_db() {
 }
 
 install_cli_symlink() {
-  if [[ -z "${POOLPROX_INSTALL_CLI:-}" ]]; then return; fi
+  # Default ON. Set POOLPROX_NO_CLI=1 to skip.
+  if [[ -n "${POOLPROX_NO_CLI:-}" ]]; then return; fi
   local target="$HOME/.local/bin"
   mkdir -p "$target"
-  ln -sf "$PROJECT_DIR/poolprox" "$target/poolprox"
   chmod +x "$PROJECT_DIR/poolprox"
-  ok "Linked $target/poolprox -> $PROJECT_DIR/poolprox"
+  # Primary command name: poolprox2 (what the user types). poolprox = alias.
+  ln -sf "$PROJECT_DIR/poolprox" "$target/poolprox2"
+  ln -sf "$PROJECT_DIR/poolprox" "$target/poolprox"
+  ok "Linked $target/poolprox2 (and poolprox) -> $PROJECT_DIR/poolprox"
   case ":$PATH:" in
     *":$target:"*) ;;
-    *) info "Add to PATH: export PATH=\"$target:\$PATH\"" ;;
+    *)
+      info "Add $target to your PATH so 'poolprox2' works anywhere:"
+      # Pick the right rc file for the user's shell
+      local rc
+      case "$(basename "${SHELL:-bash}")" in
+        zsh)  rc="$HOME/.zshrc" ;;
+        *)    rc="$HOME/.bashrc" ;;
+      esac
+      if [[ -f "$rc" ]] && ! grep -q '\.local/bin' "$rc" 2>/dev/null; then
+        echo 'export PATH="$HOME/.local/bin:$PATH"' >> "$rc"
+        ok "Added PATH line to $rc (open a new shell or: source $rc)"
+      else
+        info "  export PATH=\"$target:\$PATH\""
+      fi
+      ;;
   esac
 }
 
@@ -289,12 +306,14 @@ Next steps:
        \$EDITOR $PROJECT_DIR/.env
   2. Make sure PostgreSQL is running and DATABASE_URL points to a reachable DB.
        Quick local DB: createdb pool_proxy
-  3. Start the server:
-       cd $PROJECT_DIR && ./poolprox start
-       or:  bun start
+  3. Start the server (runs in background, prints URLs when ready):
+       poolprox2 start
   4. Open the dashboard:
        http://localhost:1631
+  5. (optional) Start automatically on boot/login:
+       poolprox2 autostart
 
+Other commands: poolprox2 status | stop | restart | logs | update | version
 Tip: re-run this installer any time to pull updates and rebuild.
 EOF
 }
