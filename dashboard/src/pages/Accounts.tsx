@@ -73,7 +73,7 @@ export default function Accounts() {
   const [bulkText, setBulkText] = useState("");
   const [addMode, setAddMode] = useState<"single" | "bulk" | "instant" | "pat" | "apikey">("bulk");
   const [bulkBrowserEngine, setBulkBrowserEngine] = useState("camoufox");
-  const [bulkHeadless, setBulkHeadless] = useState(true);
+  const [bulkHeadless, setBulkHeadless] = useState(false);
   const [bulkConcurrency, setBulkConcurrency] = useState(3);
   const [bulkUseProxy, setBulkUseProxy] = useState(true);
   const [bulkProxyMode, setBulkProxyMode] = useState<"round-robin" | "random">("round-robin");

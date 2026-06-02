@@ -1,35 +1,37 @@
-# systemd user service for PoolProx2 (production mode)
+# systemd service for PoolProx2 (production mode)
 #
-# Install:
+# System install (root):
+#   sudo cp poolprox2.service /etc/systemd/system/
+#   sudo systemctl daemon-reload
+#   sudo systemctl enable --now poolprox2
+#
+# User install (laptop/desktop):
 #   mkdir -p ~/.config/systemd/user
 #   cp poolprox2.service ~/.config/systemd/user/
 #   systemctl --user daemon-reload
-#   systemctl --user enable poolprox2
-#   systemctl --user start poolprox2
-#
-# Commands:
-#   systemctl --user status poolprox2
-#   systemctl --user restart poolprox2
-#   systemctl --user stop poolprox2
-#   journalctl --user -u poolprox2 -f
-#
-# To survive logout:
-#   loginctl enable-linger $USER
+#   systemctl --user enable --now poolprox2
+#   loginctl enable-linger $USER  # survive logout
 
 [Unit]
 Description=PoolProx2 - Pool Proxy Server
-After=network.target postgresql.service
+After=network.target
 
 [Service]
 Type=simple
-WorkingDirectory=/home/priyo/dev/OpenProject/poolprox2
-ExecStart=/home/priyo/.bun/bin/bun scripts/production.ts --skip-build
+WorkingDirectory=%h/SERVER/_refs/poolprox2
+# Kill stale processes holding our ports before starting (prevents EADDRINUSE crash loop)
+ExecStartPre=-/bin/sh -c 'for port in 1630 1631; do fuser -k $port/tcp 2>/dev/null; done; sleep 1'
+ExecStart=%h/.bun/bin/bun scripts/production.ts --skip-build
 Restart=always
-RestartSec=3
+RestartSec=5
+# Ensure child processes (bun subprocesses) are killed on stop
+KillMode=mixed
 Environment=NODE_ENV=production
 Environment=PORT=1630
 Environment=DASHBOARD_PORT=1631
-Environment=PATH=/home/priyo/.bun/bin:/usr/local/bin:/usr/bin:/bin
+Environment=PATH=%h/.bun/bin:/usr/local/bin:/usr/bin:/bin
+StandardOutput=append:%h/.local/share/poolprox2/poolprox2.log
+StandardError=append:%h/.local/share/poolprox2/poolprox2.log
 
 [Install]
 WantedBy=default.target
